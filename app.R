@@ -28,15 +28,14 @@ ui <- page_fluid(
           dateRangeInput(
             inputId = "date_range",
             label = "Date Range",
-            start = Sys.Date() - 30,
+            start = Sys.Date() - 90,
             end = Sys.Date()
           )
         ),
         
         
         card(
-          card_header("Price Chart"),
-          dygraphOutput("candle_plot")
+          uiOutput("chart_stack")
         )
       )
     ),
@@ -88,20 +87,46 @@ server <- function(input, output, session) {
     as.character(Sys.time())
   })
   
-  output$candle_plot <- renderDygraph({
-    data <- fake_data()
-    
-    ohlc <- xts(
-      x = data[, c("open", "high", "low", "close")],
-      order.by = data$day
-    )
-    
-    dygraph(ohlc, main = paste(" ", input$symbols, " Chart"),
-            group = "charts") |> 
-      dyCandlestick(compress = TRUE) |> 
-      dyRangeSelector()
+  
+  make_card <- function(symbol) {
+    card( dygraphOutput( paste0(symbol, "_candles") ) )
+  }
+  
+  output$chart_stack <- renderUI({
+    tagList( 
+      !!! lapply(input$symbols, make_card)  #!!! is arg unpacking
+      )
   })
   
+  
+  # whenever an input (symbol, date range) changes,
+  #   update the relevant charts
+  observe({
+    
+    lapply(
+      input$symbols, 
+      function(symbol) {
+        # do this for each input symbol
+        output_id <- paste0(symbol, "_candles")
+        
+        output[[output_id]] <- renderDygraph({
+          data <- fake_data()
+          
+          ohlc <- xts(
+            x = data[, c("open", "high", "low", "close")],
+            order.by = data$day
+          )
+          
+          dygraph(ohlc, main = "Some Chart",
+                  group = "charts") |> 
+            dyCandlestick(compress = TRUE) |> 
+            dyRangeSelector()         
+        })
+      }
+    )
+  })
+  
+
   output$quality_checks <- renderPrint({
     list(
       duplicate_rows = 0,
