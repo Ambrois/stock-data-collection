@@ -67,17 +67,17 @@ server <- function(input, output, session) {
   
   # Getting and Handling Data
   
-  # conn <- dbConnect(
-  #   RPostgres::Postgres(),
-  #   dbname = "stockdb",
-  #   host = "localhost",
-  #   port = 5432,
-  #   user = "postgres",
-  # )
-  # 
-  # session$OnSessionEnded(
-  #   function() { dbDisconnect(con) }
-  # )
+  conn <- dbConnect(
+    RPostgres::Postgres(),
+    dbname = "stockdb",
+    host = "localhost",
+    port = 5432,
+    user = "postgres",
+  )
+
+  session$OnSessionEnded(
+    function() { dbDisconnect(con) }
+  )
   
   get_bars <- function(symbols, start_date, end_date) {
     
