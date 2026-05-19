@@ -3,6 +3,12 @@ library(bslib)
 library(tidyverse)
 library(dygraphs)
 library(xts)
+library(DBI)
+library(RPostgres)
+
+
+
+
 
 ui <- page_fluid(
   title = "Dashboard",
@@ -58,6 +64,58 @@ ui <- page_fluid(
 )
 
 server <- function(input, output, session) {
+  
+  # Getting and Handling Data
+  
+  # conn <- dbConnect(
+  #   RPostgres::Postgres(),
+  #   dbname = "stockdb",
+  #   host = "localhost",
+  #   port = 5432,
+  #   user = "postgres",
+  # )
+  # 
+  # session$OnSessionEnded(
+  #   function() { dbDisconnect(con) }
+  # )
+  
+  get_bars <- function(symbols, start_date, end_date) {
+    
+    # convert date to unix minutes
+    market_tz <- "America/New_York"
+    
+    start_dt <- as.POSIXct(
+      paste(start_date, "07:00:00"),  ### market starts at 7:30 but wanna overestimate bounds
+      tz = market_tz
+    )
+    
+    end_dt <- as.POSIXct(
+      paste(end_date, "20:00:00"),
+      tz = market_tz
+    )
+    
+    start_ts <- floor(as.numeric(start_dt) / 60)
+    end_ts <- ceiling(as.numeric(end_dt) / 60)
+    
+    # querying data
+    data_unix_min <- dbGetQuery(con, 
+      "
+      SELECT *
+      FROM hist_minutely_bars
+      WHERE symbol = ANY($1)
+        AND ts >= $2
+        AND ts < $3
+      ORDER BY symbol, ts;
+      ", params = list(symbols, start_ts, end_ts))
+    
+    ## convert time from unix min to POSIXct
+    data_unix_min |> 
+      mutate(ts = as.POSIXct(ts * 60, origin="1970-01-01", tz="UTC"))
+    
+  }
+  
+  
+
   fake_data <- reactive({
     days <- seq(input$date_range[1], input$date_range[2], by = "day")
     n <- length(days)
@@ -75,18 +133,10 @@ server <- function(input, output, session) {
     )
   })
   
-  output$total_rows <- renderText({
-    "1,234,567"
-  })
   
-  output$num_symbols <- renderText({
-    "503"
-  })
+  # UI Outputs
   
-  output$latest_ts <- renderText({
-    as.character(Sys.time())
-  })
-  
+  ## Outputs for "Stocks" Page
   
   make_card <- function(symbol) {
     card( dygraphOutput( paste0(symbol, "_candles") ) )
@@ -94,19 +144,18 @@ server <- function(input, output, session) {
   
   output$chart_stack <- renderUI({
     tagList( 
-      !!! lapply(input$symbols, make_card)  #!!! is arg unpacking
+      !!! lapply(input$symbols, make_card)  ### '!!!' is arg unpacking
       )
   })
   
-  
-  # whenever an input (symbol, date range) changes,
-  #   update the relevant charts
+  ### whenever an input (symbol, date range) changes,
+  ###   update the relevant charts
   observe({
     
     lapply(
       input$symbols, 
       function(symbol) {
-        # do this for each input symbol
+        ### do this for each input symbol
         output_id <- paste0(symbol, "_candles")
         
         output[[output_id]] <- renderDygraph({
@@ -127,6 +176,19 @@ server <- function(input, output, session) {
   })
   
 
+  ## Outputs for "Data" Page
+  output$total_rows <- renderText({
+    "1,234,567"
+  })
+  
+  output$num_symbols <- renderText({
+    "503"
+  })
+  
+  output$latest_ts <- renderText({
+    as.character(Sys.time())
+  })
+  
   output$quality_checks <- renderPrint({
     list(
       duplicate_rows = 0,
