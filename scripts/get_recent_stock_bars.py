@@ -109,7 +109,7 @@ def bulk_send_psql(bars, conn_params) -> None:
     bars.to_csv(buffer, index=False, header=False)
     buffer.seek(0)
 
-    with psycopg.connect(conn_params) as conn:
+    with psycopg.connect(**conn_params) as conn:
         with conn.cursor() as cur:
 
             # create staging table to copy into
