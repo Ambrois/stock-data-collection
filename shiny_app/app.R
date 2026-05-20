@@ -91,12 +91,15 @@ server <- function(input, output, session) {
   )$symbol
   
   ## For Sidebar:
-  updateSelectizeInput(session,
-              inputId = "symbols",
-              choices = available_symbols,
-              selected = intersect(c("AAPL", "NVDA"), available_symbols),
-              server = TRUE
-  )
+  session$onFlushed(function() {
+    updateSelectizeInput(
+      session,
+      inputId = "symbols",
+      choices = available_symbols,
+      selected = head(available_symbols, 2),
+      server = TRUE
+    )
+  }, once = TRUE)
   
   
   ## For Main Section:
@@ -252,7 +255,9 @@ server <- function(input, output, session) {
     format(n, big.mark = ",", scientific = FALSE)
   })
   
-  output$available_symbol_count <- nrow(available_symbols)
+  output$available_symbol_count <- renderText({
+    format(length(available_symbol), big.mark=",")
+  })
   
   output$total_latest_ts <- renderText({"Placeholder"})
   output$total_duplicate_row_count <- renderText({"Placeholder"})
