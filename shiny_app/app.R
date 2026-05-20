@@ -35,18 +35,18 @@ ui <- page_fluid(
           )
         ),
         
-        ## Charts
-        card(
-          uiOutput("chart_stack")
-        ),
-        
         ## Data
         layout_columns(
           value_box("Queried Row Count", textOutput("queried_row_count")),
           value_box("Latest Timestamp", textOutput("queried_latest_ts")),
           value_box("Duplicated Rows Count", textOutput("queried_duplicate_row_count"))
         ),
-        value_box("Null Values By Symbol", tableOutput("queried_null_values"))
+        value_box("Null Values By Symbol", tableOutput("queried_null_values")),
+        
+        ## Charts
+        card(
+          uiOutput("chart_stack")
+        )
         
       )
     ),
