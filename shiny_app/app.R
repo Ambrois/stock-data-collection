@@ -69,8 +69,8 @@ server <- function(input, output, session) {
     dbname = "stockdb",
     host = "localhost",
     port = 5432,
-    user = "postgres",
-    password = ""
+    user = "shiny_app",
+    password = sys.getenv("STOCKDB_PASSWORD")
   )
 
   session$onSessionEnded(
