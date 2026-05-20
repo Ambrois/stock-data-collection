@@ -54,7 +54,10 @@ ui <- page_fluid(
       
       card(
         card_header("Data Quality Checks"),
-        verbatimTextOutput("quality_checks")
+        layout_columns(
+          value_box("Duplicated Rows Count", textOutput("n_duplicated_rows")),
+          value_box("Null Values By Symbol", tableOutput("null_values"))
+        ),
       )
     )
   )
@@ -141,6 +144,7 @@ server <- function(input, output, session) {
   }
   
   output$chart_stack <- renderUI({
+    req(input$symbols)
     tagList( 
       !!! lapply(input$symbols, make_card)  ### '!!!' is arg unpacking
       )
@@ -153,14 +157,15 @@ server <- function(input, output, session) {
     
     lapply(input$symbols, function(this_symbol) {
       local({
-        output_id <- paste0(this_symbol, "_candles")
+        symbol_now <- this_symbol
+        output_id <- paste0(symbol_now, "_candles")
         
         output[[output_id]] <- renderDygraph({
           df <- bars_data() |>
-            filter(.data$symbol == this_symbol)
+            filter(.data$symbol == symbol_now)
           
           validate(
-            need(nrow(df) > 0, paste("No data found for", this_symbol))
+            need(nrow(df) > 0, paste("No data found for", symbol_now))
           )
           
           ohlc <- xts(
@@ -168,7 +173,7 @@ server <- function(input, output, session) {
             order.by = df$ts
           )
           
-          dygraph(ohlc, main = this_symbol, group = "charts") |> 
+          dygraph(ohlc, main = symbol_now, group = "charts") |> 
             dyCandlestick(compress = FALSE) |> 
             dyRangeSelector()
         })
@@ -180,7 +185,16 @@ server <- function(input, output, session) {
   ## Outputs for "Data" Page
   
   output$approx_total_rows <- renderText({
-    "1,234,567"  ### TODO
+    result <- dbGetQuery(con,
+      "
+        SELECT reltuples::bigint AS estimated_rows
+        FROM pg_class
+        WHERE oid = 'hist_minutely_bars'::regclass;
+      "
+    )
+    n <- result[[1]][1]
+    format(n, big.mark=",", scientific = FALSE)
+    
   })
   
   output$queried_rows <- renderText({
@@ -197,21 +211,20 @@ server <- function(input, output, session) {
     as.character(max(df$ts, na.rm = TRUE))
   })
   
-  output$quality_checks <- renderPrint({
-    n_duplicated_rows <- bars_data() |> 
+  output$n_duplicated_rows <- renderText({
+    n_dup <- bars_data() |> 
       group_by(symbol, ts) |> 
       summarize(size = n()) |> 
       filter(size > 1) |> 
-      count()
+      pull(n)
     
-    null_vals <- bars_data() |> 
+    format(n_dup, big.mark = ",")
+  })
+  
+  output$null_values <- renderTable({
+    bars_data() |> 
+      group_by(symbol) |> 
       summarize(across(everything(), ~ sum(is.na(.))))
-    
-    ### TODO how many minutes are accounted for?
-    ###   should be the row count divided by the theoretical number of market minutes
-    ###   within the timespan
-    
-    list(n_duplicated_rows, null_vals)
   })
 }
 
