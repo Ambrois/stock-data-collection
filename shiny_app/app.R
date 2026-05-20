@@ -6,10 +6,6 @@ library(xts)
 library(DBI)
 library(RPostgres)
 
-
-
-
-
 ui <- page_fluid(
   title = "Dashboard",
   
@@ -50,9 +46,10 @@ ui <- page_fluid(
       "Data",
       
       layout_columns(
-        value_box("Total Rows", textOutput("total_rows")),
+        value_box("Queried Row Count", textOutput("queried_rows")),
         value_box("Symbols", textOutput("num_symbols")),
         value_box("Latest Timestamp", textOutput("latest_ts"))
+        value_box("Total DB Row Count Estimate", textOutput("approx_total_rows")),
       ),
       
       card(
@@ -67,15 +64,15 @@ server <- function(input, output, session) {
   
   # Getting and Handling Data
   
-  conn <- dbConnect(
+  con <- dbConnect(
     RPostgres::Postgres(),
     dbname = "stockdb",
     host = "localhost",
     port = 5432,
-    user = "postgres",
+    user = "postgres"
   )
 
-  session$OnSessionEnded(
+  session$onSessionEnded(
     function() { dbDisconnect(con) }
   )
   
@@ -102,7 +99,7 @@ server <- function(input, output, session) {
       "
       SELECT *
       FROM hist_minutely_bars
-      WHERE symbol = ANY($1)
+      WHERE symbol = ANY($1::text[])
         AND ts >= $2
         AND ts < $3
       ORDER BY symbol, ts;
@@ -114,22 +111,15 @@ server <- function(input, output, session) {
     
   }
   
-  
-
-  fake_data <- reactive({
-    days <- seq(input$date_range[1], input$date_range[2], by = "day")
-    n <- length(days)
+  ## Get real data
+  bars_data <- reactive({
+    req(input$symbols)
+    req(input$date_range)
     
-    close <- cumsum(rnorm(n)) + 100
-    open <- close + rnorm(n, sd = 0.5)
-    spread <- runif(n, 0.5, 2)
-    
-    data.frame(
-      day = days,
-      open = round(open, 2),
-      high = round(pmax(open, close) + spread, 2),
-      low = round(pmin(open, close) - spread, 2),
-      close = round(close, 2)
+    get_bars(
+      symbols = input$symbols,
+      start_date = input$date_range[1],
+      end_date = input$date_range[2]
     )
   })
   
@@ -151,51 +141,71 @@ server <- function(input, output, session) {
   ### whenever an input (symbol, date range) changes,
   ###   update the relevant charts
   observe({
+    req(input$symbols)
     
-    lapply(
-      input$symbols, 
-      function(symbol) {
-        ### do this for each input symbol
-        output_id <- paste0(symbol, "_candles")
+    lapply(input$symbols, function(this_symbol) {
+      local({
+        output_id <- paste0(this_symbol, "_candles")
         
         output[[output_id]] <- renderDygraph({
-          data <- fake_data()
+          df <- bars_data() |>
+            filter(.data$symbol == this_symbol)
           
-          ohlc <- xts(
-            x = data[, c("open", "high", "low", "close")],
-            order.by = data$day
+          validate(
+            need(nrow(df) > 0, paste("No data found for", this_symbol))
           )
           
-          dygraph(ohlc, main = "Some Chart",
-                  group = "charts") |> 
+          ohlc <- xts(
+            x = df[, c("open", "high", "low", "close")],
+            order.by = df$ts
+          )
+          
+          dygraph(ohlc, main = this_symbol, group = "charts") |> 
             dyCandlestick(compress = TRUE) |> 
-            dyRangeSelector()         
+            dyRangeSelector()
         })
-      }
-    )
+      })
+    })
   })
   
 
   ## Outputs for "Data" Page
-  output$total_rows <- renderText({
-    "1,234,567"
+  
+  output$approx_total_rows <- renderText({
+    "1,234,567"  ### TODO
+  })
+  
+  output$queried_rows <- renderText({
+    format(nrow(bars_data()), big.mark = ",")
   })
   
   output$num_symbols <- renderText({
-    "503"
+    format(n_distinct( bars_data()$symbol ), big.mark = ",")
   })
   
   output$latest_ts <- renderText({
-    as.character(Sys.time())
+    df <- bars_data()
+    req(nrow(df) > 0)
+    as.character(max(df$ts, na.rm = TRUE))
   })
   
   output$quality_checks <- renderPrint({
-    list(
-      duplicate_rows = 0,
-      stale_symbols = 3,
-      status = "Using fake data for now"
-    )
+    n_duplicated_rows <- bars_data() |> 
+      group_by(symbol, ts) |> 
+      summarize(size = n()) |> 
+      filter(size > 1) |> 
+      count()
+    
+    null_vals <- bars_data() |> 
+      summarize(across(everything(), ~ sum(is.na(.))))
+    
+    ### TODO how many minutes are accounted for?
+    ###   should be the row count divided by the theoretical number of market minutes
+    ###   within the timespan
+    
+    list(n_duplicated_rows, null_vals)
   })
 }
+
 
 shinyApp(ui, server)
