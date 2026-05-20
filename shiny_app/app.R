@@ -41,7 +41,7 @@ ui <- page_fluid(
           value_box("Latest Timestamp", textOutput("queried_latest_ts")),
           value_box("Duplicated Rows Count", textOutput("queried_duplicate_row_count"))
         ),
-        value_box("Null Values By Symbol", tableOutput("queried_null_values")),
+        value_box("Null Values", tableOutput("queried_null_values")),
         
         ## Charts
         card(
@@ -61,7 +61,7 @@ ui <- page_fluid(
         value_box("Duplicated Rows Count", textOutput("total_duplicate_row_count"))
       ),
       
-      value_box("Null Values By Symbol", tableOutput("total_null_values"))
+      value_box("Null Values", tableOutput("total_null_values"))
       
       # TODO add last-updated status, database size, available size in disk.
     )
