@@ -54,10 +54,9 @@ ui <- page_fluid(
     nav_panel(
       "DataBase Info",
       
-      # Queried data info
-      
       layout_columns(
         value_box("Approximate Total Row Count", textOutput("total_row_count")),
+        value_box("Unique Symbol Count", textOutput("available_symbol_count")),
         value_box("Latest Timestamp", textOutput("total_latest_ts")),
         value_box("Duplicated Rows Count", textOutput("total_duplicate_row_count"))
       ),
@@ -252,6 +251,8 @@ server <- function(input, output, session) {
     n <- result$estimated_rows[1]
     format(n, big.mark = ",", scientific = FALSE)
   })
+  
+  output$available_symbol_count <- nrows(available_symbols)
   
   output$total_latest_ts <- renderText({"Placeholder"})
   output$total_duplicate_row_count <- renderText({"Placeholder"})
