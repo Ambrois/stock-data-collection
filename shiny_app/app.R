@@ -169,7 +169,7 @@ server <- function(input, output, session) {
           )
           
           dygraph(ohlc, main = this_symbol, group = "charts") |> 
-            dyCandlestick(compress = TRUE) |> 
+            dyCandlestick(compress = FALSE) |> 
             dyRangeSelector()
         })
       })
