@@ -70,7 +70,7 @@ server <- function(input, output, session) {
     host = "localhost",
     port = 5432,
     user = "shiny_app",
-    password = sys.getenv("STOCKDB_PASSWORD")
+    password = Sys.getenv("STOCKDB_PASSWORD")
   )
 
   session$onSessionEnded(
