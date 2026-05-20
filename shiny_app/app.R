@@ -30,7 +30,7 @@ ui <- page_fluid(
           dateRangeInput(
             inputId = "date_range",
             label = "Date Range",
-            start = Sys.Date() - 90,
+            start = Sys.Date() - 30,
             end = Sys.Date()
           )
         ),
