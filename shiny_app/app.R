@@ -23,8 +23,8 @@ ui <- page_fluid(
         sidebar = sidebar(
           selectizeInput(inputId = "symbols",
                       label = "Symbol",
-                      choices = c("AAPL", "MSFT", "NVDA"),
-                      selected = c("AAPL", "NVDA"),
+                      choices = NULL,
+                      selected = NULL,
                       multiple = TRUE,
                       options = list(maxItems=3)),
           dateRangeInput(
@@ -86,6 +86,22 @@ server <- function(input, output, session) {
     function() { dbDisconnect(con) }
   )
   
+  ## Get available symbols
+  available_symbols <- dbGetQuery(con, 
+    " SELECT symbol FROM symbols ORDER BY symbol; "
+  )$symbol
+  
+  ## For Sidebar:
+  UpdateSelectizeInput(session,
+              inputId = "symbols",
+              choices = available_symbols,
+              selected = intersect(c("AAPL", "NVDA"), available_symbols),
+              server = TRUE
+  )
+  
+  
+  ## For Main Section:
+  
   get_bars <- function(symbols, start_date, end_date) {
     
     # convert date to unix minutes
@@ -128,7 +144,7 @@ server <- function(input, output, session) {
     
   }
   
-  ## Get real data
+  ## Get bars data for selected symbols
   bars_data <- reactive({
     req(input$symbols)
     req(input$date_range)
