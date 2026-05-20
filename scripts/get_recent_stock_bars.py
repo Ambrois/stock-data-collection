@@ -3,7 +3,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 import psycopg
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import io
 import time
@@ -19,15 +19,46 @@ this_dir = p.dirname(p.abspath(__file__))
 with open(p.join(this_dir, "sp500_symbols_2026-05-13.txt")) as file:
     sp500_symbols = [symbol.strip() for symbol in file]
 
+def minute_epoch_to_datetime(minute_epoch: int) -> datetime:
+    return datetime.fromtimestamp(minute_epoch * 60, tz=timezone.utc)
 
-def get_min_bars_since_2016(symbol):
+def get_latest_ts_for_symbol(symbol: str, conninfo: str) -> int | None:
+    # returns None if a symbol has no rows yet
+    with psycopg.connect(conninfo) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT max(ts)
+                FROM public.hist_minutely_bars
+                WHERE symbol = %s;
+                """,
+                (symbol,),
+            )
+
+            latest_ts = cur.fetchone()[0]
+            return latest_ts
+
+
+def get_start_datetime_for_symbol(symbol: str, conninfo: str) -> datetime:
+    # If we already have data for this symbol, start one minute after the latest stored bar.
+    # If we do not have data, fall back to 10 years ago.
+    latest_ts = get_latest_ts_for_symbol(symbol, conninfo)
+
+    if latest_ts is None:
+        ten_years_prior_year = datetime.now(timezone.utc).year - 10
+        return datetime(ten_years_prior_year, 1, 1, tzinfo=timezone.utc)
+
+    return minute_epoch_to_datetime(latest_ts + 1)
+
+
+def get_min_bars(symbol: str, start_datetime: datetime):
     request_params = StockBarsRequest(
         symbol_or_symbols=symbol,
         timeframe=TimeFrame.Minute,
-        start=datetime(2016, 1, 1),
+        start=start_datetime,
     )
 
-    print(f"\tRequesting bars...")
+    print(f"\tRequesting bars starting from {start_datetime.isoformat()}...")
     bars = client.get_stock_bars(request_params)
     print("\tBars received.")
     return bars.df
@@ -50,13 +81,17 @@ def clean_bars(bars):
     bars["volume"] = bars["volume"].apply(int)
     bars["tradecount"] = bars["tradecount"].apply(int)
 
-    ## avoid conflicts inside the dataframe itself
+    ## avoid duplicate bars inside the dataframe itself
     bars = bars.drop_duplicates(subset=["symbol", "ts"])
 
     return bars
 
 
 def bulk_send_psql(bars, conninfo) -> None:
+    if bars.empty:
+        print("\tNo new rows to insert.")
+        return
+
     ## write bars to csv in memory
     buffer = io.StringIO()
     bars.to_csv(buffer, index=False, header=False)
@@ -134,11 +169,16 @@ if __name__ == "__main__":
 
     for i, symbol in enumerate(sp500_symbols):
 
-        # main thing
         print(f"Starting for symbol {i + 1} of {total_symbols}: {symbol}...")
-        bars = get_min_bars_since_2016(symbol)
-        bars = clean_bars(bars)
-        bulk_send_psql(bars, conninfo)
+
+        start_datetime = get_start_datetime_for_symbol(symbol, conninfo)
+        bars = get_min_bars(symbol, start_datetime)
+
+        if bars.empty:
+            print(f"\tNo bars returned for {symbol}.")
+        else:
+            bars = clean_bars(bars)
+            bulk_send_psql(bars, conninfo)
 
         # time keeping
         completed = i + 1
@@ -154,4 +194,3 @@ if __name__ == "__main__":
             f"ETA: {format_duration(remaining_seconds)} | "
             f"Finish: {finish_label}"
         )
-
