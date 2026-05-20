@@ -17,7 +17,7 @@ ui <- page_fluid(
   navset_tab(
     
     nav_panel(
-      "Stocks",
+      "Stock Info",
       
       page_sidebar(
         sidebar = sidebar(
@@ -35,30 +35,36 @@ ui <- page_fluid(
           )
         ),
         
-        
+        ## Charts
         card(
           uiOutput("chart_stack")
-        )
+        ),
+        
+        ## Data
+        layout_columns(
+          value_box("Queried Row Count", textOutput("queried_row_count")),
+          value_box("Latest Timestamp", textOutput("queried_latest_ts")),
+          value_box("Duplicated Rows Count", textOutput("queried_duplicate_row_count"))
+        ),
+        value_box("Null Values By Symbol", tableOutput("queried_null_values"))
+        
       )
     ),
     
     nav_panel(
-      "Data",
+      "DataBase Info",
+      
+      # Queried data info
       
       layout_columns(
-        value_box("Queried Row Count", textOutput("queried_rows")),
-        value_box("Symbols", textOutput("num_symbols")),
-        value_box("Latest Timestamp", textOutput("latest_ts")),
-        value_box("Total DB Row Count Estimate", textOutput("approx_total_rows"))
+        value_box("Approximate Total Row Count", textOutput("total_row_count")),
+        value_box("Latest Timestamp", textOutput("total_latest_ts")),
+        value_box("Duplicated Rows Count", textOutput("total_duplicate_row_count"))
       ),
       
-      card(
-        card_header("Data Quality Checks"),
-        layout_columns(
-          value_box("Duplicated Rows Count", textOutput("n_duplicated_rows")),
-          value_box("Null Values By Symbol", tableOutput("null_values"))
-        ),
-      )
+      value_box("Null Values By Symbol", tableOutput("total_null_values"))
+      
+      # TODO add last-updated status, database size, available size in disk.
     )
   )
 )
@@ -137,8 +143,9 @@ server <- function(input, output, session) {
   
   # UI Outputs
   
-  ## Outputs for "Stocks" Page
+  ## Outputs for "Stock Info" Page
   
+  ### Charts
   make_card <- function(symbol) {
     card( dygraphOutput( paste0(symbol, "_candles") ) )
   }
@@ -150,8 +157,8 @@ server <- function(input, output, session) {
       )
   })
   
-  ### whenever an input (symbol, date range) changes,
-  ###   update the relevant charts
+  #### whenever an input (symbol, date range) changes,
+  ####   update the relevant charts
   observe({
     req(input$symbols)
     
@@ -181,51 +188,59 @@ server <- function(input, output, session) {
     })
   })
   
-
-  ## Outputs for "Data" Page
+  ### Queried Data Summaries
   
-  output$approx_total_rows <- renderText({
-    result <- dbGetQuery(con,
-      "
-        SELECT reltuples::bigint AS estimated_rows
-        FROM pg_class
-        WHERE oid = 'hist_minutely_bars'::regclass;
-      "
-    )
-    n <- result[[1]][1]
-    format(n, big.mark=",", scientific = FALSE)
-    
-  })
-  
-  output$queried_rows <- renderText({
+  output$queried_row_count <- renderText({
     format(nrow(bars_data()), big.mark = ",")
   })
   
-  output$num_symbols <- renderText({
-    format(n_distinct( bars_data()$symbol ), big.mark = ",")
-  })
-  
-  output$latest_ts <- renderText({
+  output$queried_latest_ts <- renderText({
     df <- bars_data()
     req(nrow(df) > 0)
     as.character(max(df$ts, na.rm = TRUE))
   })
   
-  output$n_duplicated_rows <- renderText({
+  output$queried_duplicate_row_count <- renderText({
     n_dup <- bars_data() |> 
-      group_by(symbol, ts) |> 
-      summarize(size = n()) |> 
+      count(symbol, ts, name = "size") |> 
       filter(size > 1) |> 
-      pull(n)
+      summarize(total = sum(size - 1), .groups = "drop") |> 
+      pull(total)
     
     format(n_dup, big.mark = ",")
   })
   
-  output$null_values <- renderTable({
-    bars_data() |> 
+  output$queried_null_values <- renderTable({
+    df <- bars_data()
+    validate( need(nrow(df) > 0, "No rows queried.") ) 
+    df |> 
       group_by(symbol) |> 
       summarize(across(everything(), ~ sum(is.na(.))))
   })
+
+  
+  ## Outputs for "DataBase Info" Page
+  
+  output$total_row_count <- renderText({
+    result <- dbGetQuery(con,
+    "
+      SELECT reltuples::bigint AS estimated_rows
+      FROM pg_class
+      WHERE oid = 'public.hist_minutely_bars'::regclass;
+    ")
+    
+    if (nrow(result) <= 0 || is.na(result$estimated_rows[1])) {
+      return("Unavailable")
+    }
+    
+    n <- result$estimated_rows[1]
+    format(n, big.mark = ",", scientific = FALSE)
+  })
+  
+  output$total_latest_ts <- renderText({"Placeholder"})
+  output$total_duplicate_row_count <- renderText({"Placeholder"})
+  output$total_null_values <- renderTable({data.frame( Place = c("Holder") )})
+  
 }
 
 
