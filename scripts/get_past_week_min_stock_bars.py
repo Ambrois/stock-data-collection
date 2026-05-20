@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 api_key = os.getenv("ALPACAMARKETS_API_KEY")
 secret_key = os.getenv("ALPACAMARKETS_SECRET_KEY")
-stock_db_password = os.getenv("STOCKDB_SCRIPT_PASSWORD")
+stock_db_password = os.getenv("STOCKDB_SCRIPT_PASS")
 
 client = StockHistoricalDataClient(api_key, secret_key)
 
@@ -21,7 +21,7 @@ with open(p.join(this_dir, "sp500_symbols_2026-05-13.txt")) as file:
     sp500_symbols = [symbol.strip() for symbol in file]
 
 
-week_ago_date = datetime.now() - timedelta(days=30)
+week_ago_date = datetime.now() - timedelta(days=7)
 
 # Loop over sp500:
 for i,symbol in enumerate(sp500_symbols):
@@ -78,7 +78,7 @@ for i,symbol in enumerate(sp500_symbols):
             schema = "public",
             if_exists = "append",
             index = False,
-            chunksize = 10_000,
+            chunksize = 2_000,
             method = insert_ignore_duplicates,
             dtype = {
                 "symbol" : String(5),
