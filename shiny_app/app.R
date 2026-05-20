@@ -92,7 +92,7 @@ server <- function(input, output, session) {
   )$symbol
   
   ## For Sidebar:
-  UpdateSelectizeInput(session,
+  updateSelectizeInput(session,
               inputId = "symbols",
               choices = available_symbols,
               selected = intersect(c("AAPL", "NVDA"), available_symbols),
