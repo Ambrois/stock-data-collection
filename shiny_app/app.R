@@ -69,7 +69,8 @@ server <- function(input, output, session) {
     dbname = "stockdb",
     host = "localhost",
     port = 5432,
-    user = "postgres"
+    user = "postgres",
+    password = ""
   )
 
   session$onSessionEnded(
