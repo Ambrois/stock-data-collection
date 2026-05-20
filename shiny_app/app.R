@@ -96,15 +96,22 @@ server <- function(input, output, session) {
     end_ts <- ceiling(as.numeric(end_dt) / 60)
     
     # querying data
-    data_unix_min <- dbGetQuery(con, 
+    data_unix_min <- dbGetQuery(
+      con,
       "
-      SELECT *
-      FROM hist_minutely_bars
-      WHERE symbol = ANY($1::text[])
-        AND ts >= $2
-        AND ts < $3
-      ORDER BY symbol, ts;
-      ", params = list(symbols, start_ts, end_ts))
+        SELECT *
+        FROM hist_minutely_bars
+        WHERE symbol = ANY(string_to_array($1, ','))
+          AND ts >= $2
+          AND ts < $3
+        ORDER BY symbol, ts;
+      ",
+      params = list(
+        paste(symbols, collapse = ","),
+        start_ts,
+        end_ts
+      )
+    )
     
     ## convert time from unix min to POSIXct
     data_unix_min |> 
