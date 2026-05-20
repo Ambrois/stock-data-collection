@@ -48,8 +48,8 @@ ui <- page_fluid(
       layout_columns(
         value_box("Queried Row Count", textOutput("queried_rows")),
         value_box("Symbols", textOutput("num_symbols")),
-        value_box("Latest Timestamp", textOutput("latest_ts"))
-        value_box("Total DB Row Count Estimate", textOutput("approx_total_rows")),
+        value_box("Latest Timestamp", textOutput("latest_ts")),
+        value_box("Total DB Row Count Estimate", textOutput("approx_total_rows"))
       ),
       
       card(
