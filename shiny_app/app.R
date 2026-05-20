@@ -256,7 +256,7 @@ server <- function(input, output, session) {
   })
   
   output$available_symbol_count <- renderText({
-    format(length(available_symbol), big.mark=",")
+    format(length(available_symbols), big.mark=",")
   })
   
   output$total_latest_ts <- renderText({"Placeholder"})
