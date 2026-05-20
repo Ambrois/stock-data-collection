@@ -3,12 +3,14 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from datetime import datetime, timedelta
 import os
+from sqlalchemy.engine import URL
 from sqlalchemy import create_engine
 from sqlalchemy.types import String, Integer, Float, BigInteger
 from sqlalchemy.dialects.postgresql import insert
 
 api_key = os.getenv("ALPACAMARKETS_API_KEY")
 secret_key = os.getenv("ALPACAMARKETS_SECRET_KEY")
+stock_db_password = os.getenv("STOCKDB_SCRIPT_PASSWORD")
 
 client = StockHistoricalDataClient(api_key, secret_key)
 
@@ -49,9 +51,16 @@ for i,symbol in enumerate(sp500_symbols):
 
 
     # Sending to PSQL
-    engine = create_engine(
-        "postgresql+psycopg2://postgres@localhost:5432/stockdb"
+    url = URL.create(
+        drivername="postgresql+psycopg",
+        username="script_writer",
+        password=stock_db_password,
+        host="localhost",
+        port=5432,
+        database="stockdb",
     )
+
+    engine = create_engine(url)
 
     def insert_ignore_duplicates(table, conn, keys, data_iter):
         rows = [dict(zip(keys, row)) for row in data_iter]
