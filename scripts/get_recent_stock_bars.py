@@ -13,6 +13,18 @@ secret_key = os.getenv("ALPACAMARKETS_SECRET_KEY")
 
 client = StockHistoricalDataClient(api_key, secret_key)
 
+stock_db_password = os.getenv("STOCKDB_SCRIPT_PASS")
+
+if stock_db_password is None:
+    raise RuntimeError("Missing environment variable: STOCKDB_SCRIPT_PASS")
+
+conn_params = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "stockdb",
+    "user": "script_writer",
+    "password": stock_db_password,
+}
 ## make list of sp500 names, read from file
 p = os.path
 this_dir = p.dirname(p.abspath(__file__))
@@ -22,9 +34,9 @@ with open(p.join(this_dir, "sp500_symbols_2026-05-13.txt")) as file:
 def minute_epoch_to_datetime(minute_epoch: int) -> datetime:
     return datetime.fromtimestamp(minute_epoch * 60, tz=timezone.utc)
 
-def get_latest_ts_for_symbol(symbol: str, conninfo: str) -> int | None:
+def get_latest_ts_for_symbol(symbol: str, conn_params: dict) -> int | None:
     # returns None if a symbol has no rows yet
-    with psycopg.connect(conninfo) as conn:
+    with psycopg.connect(**conn_params) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -39,10 +51,10 @@ def get_latest_ts_for_symbol(symbol: str, conninfo: str) -> int | None:
             return latest_ts
 
 
-def get_start_datetime_for_symbol(symbol: str, conninfo: str) -> datetime:
+def get_start_datetime_for_symbol(symbol: str, conn_params: dict) -> datetime:
     # If we already have data for this symbol, start one minute after the latest stored bar.
     # If we do not have data, fall back to 10 years ago.
-    latest_ts = get_latest_ts_for_symbol(symbol, conninfo)
+    latest_ts = get_latest_ts_for_symbol(symbol, conn_params)
 
     if latest_ts is None:
         ten_years_prior_year = datetime.now(timezone.utc).year - 10
@@ -87,7 +99,7 @@ def clean_bars(bars):
     return bars
 
 
-def bulk_send_psql(bars, conninfo) -> None:
+def bulk_send_psql(bars, conn_params) -> None:
     if bars.empty:
         print("\tNo new rows to insert.")
         return
@@ -97,7 +109,7 @@ def bulk_send_psql(bars, conninfo) -> None:
     bars.to_csv(buffer, index=False, header=False)
     buffer.seek(0)
 
-    with psycopg.connect(conninfo) as conn:
+    with psycopg.connect(conn_params) as conn:
         with conn.cursor() as cur:
 
             # create staging table to copy into
@@ -154,15 +166,6 @@ def format_duration(seconds):
 
 
 if __name__ == "__main__":
-    stock_db_password = os.getenv("STOCKDB_SCRIPT_PASS")
-
-    if stock_db_password is None:
-        raise RuntimeError("Missing environment variable: STOCKDB_SCRIPT_PASS")
-
-    conninfo = (
-        f"postgresql://script_writer:{stock_db_password}"
-        f"@localhost:5432/stockdb"
-    )
 
     started_at = time.monotonic()
     total_symbols = len(sp500_symbols)
@@ -171,14 +174,14 @@ if __name__ == "__main__":
 
         print(f"Starting for symbol {i + 1} of {total_symbols}: {symbol}...")
 
-        start_datetime = get_start_datetime_for_symbol(symbol, conninfo)
+        start_datetime = get_start_datetime_for_symbol(symbol, conn_params)
         bars = get_min_bars(symbol, start_datetime)
 
         if bars.empty:
             print(f"\tNo bars returned for {symbol}.")
         else:
             bars = clean_bars(bars)
-            bulk_send_psql(bars, conninfo)
+            bulk_send_psql(bars, conn_params)
 
         # time keeping
         completed = i + 1
