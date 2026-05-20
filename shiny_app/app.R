@@ -252,7 +252,7 @@ server <- function(input, output, session) {
     format(n, big.mark = ",", scientific = FALSE)
   })
   
-  output$available_symbol_count <- nrows(available_symbols)
+  output$available_symbol_count <- nrow(available_symbols)
   
   output$total_latest_ts <- renderText({"Placeholder"})
   output$total_duplicate_row_count <- renderText({"Placeholder"})
