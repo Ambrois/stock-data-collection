@@ -40,14 +40,24 @@ register_summary_outputs <- function(
     format(length(available_symbols), big.mark = ",")
   })
 
-  output$total_ts_range <- renderText({
+  output$total_ts_start <- renderText({
     ts_range <- get_total_timestamp_range(con)
 
     if (is.null(ts_range)) {
       return("Unavailable")
     }
 
-    paste(ts_range$start, "to", ts_range$end)
+    ts_range$start
+  })
+
+  output$total_ts_end <- renderText({
+    ts_range <- get_total_timestamp_range(con)
+
+    if (is.null(ts_range)) {
+      return("Unavailable")
+    }
+
+    ts_range$end
   })
 
   output$table_size <- renderText({
@@ -70,12 +80,20 @@ register_summary_outputs <- function(
     format(chunk_summary$chunk_count, big.mark = ",")
   })
 
-  output$chunk_range <- renderText({
+  output$chunk_range_start <- renderText({
     if (is.null(chunk_summary)) {
       return("Unavailable")
     }
 
-    paste(chunk_summary$range_start, "to", chunk_summary$range_end)
+    chunk_summary$range_start
+  })
+
+  output$chunk_range_end <- renderText({
+    if (is.null(chunk_summary)) {
+      return("Unavailable")
+    }
+
+    chunk_summary$range_end
   })
 
   output$total_null_values <- renderTable({

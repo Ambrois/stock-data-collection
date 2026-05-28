@@ -81,7 +81,8 @@ create_app_ui <- function() {
           layout_columns(
             value_box("Estimated Total Row Count", textOutput("total_row_count")),
             value_box("Unique Symbol Count", textOutput("available_symbol_count")),
-            value_box("Timestamp Range (PT)", textOutput("total_ts_range"))
+            value_box("Start (PT)", textOutput("total_ts_start")),
+            value_box("End (PT)", textOutput("total_ts_end"))
           )
         ),
 
@@ -98,7 +99,8 @@ create_app_ui <- function() {
           card_header("Timescale Chunks"),
           layout_columns(
             value_box("Chunk Count", textOutput("chunk_count")),
-            value_box("Chunk Range (PT)", textOutput("chunk_range"))
+            value_box("Start (PT)", textOutput("chunk_range_start")),
+            value_box("End (PT)", textOutput("chunk_range_end"))
           ),
           div(
             class = "scrollable-table-card",
