@@ -98,7 +98,7 @@ ui <- page_fluid(
 
 server <- function(input, output, session) {
   
-  # Getting and Handling Data
+  # Setup
   
   con <- dbConnect(
     RPostgres::Postgres(),
@@ -112,6 +112,21 @@ server <- function(input, output, session) {
   session$onSessionEnded(
     function() { dbDisconnect(con) }
   )
+
+  # Configuration
+
+  market_tz <- "America/New_York"
+  query_start_time <- "07:00:00"  ### market starts at 7:30 but wanna overestimate bounds
+  query_end_time <- "20:00:00"
+  candle_sizes_minutes <- c(
+    1, 2, 5, 10, 15, 30, 60,
+    60 * 2,
+    60 * 4,
+    60 * 6.5,
+    60 * 13,
+    60 * 6.5 * 5
+  )
+  target_max_visible_candles <- 300
   
   ## Get available symbols
   available_symbols <- dbGetQuery(con, 
@@ -130,25 +145,28 @@ server <- function(input, output, session) {
   }, once = TRUE)
   
   
-  ## For Main Section:
+  # Data Helpers
+
+  date_window_for_range <- function(date_range) {
+    list(
+      start = as.POSIXct(
+        paste(date_range[1], query_start_time),
+        tz = market_tz
+      ),
+      end = as.POSIXct(
+        paste(date_range[2], query_end_time),
+        tz = market_tz
+      )
+    )
+  }
   
   get_bars <- function(symbols, start_date, end_date) {
     
     # convert date to unix minutes
-    market_tz <- "America/New_York"
+    date_window <- date_window_for_range(c(start_date, end_date))
     
-    start_dt <- as.POSIXct(
-      paste(start_date, "07:00:00"),  ### market starts at 7:30 but wanna overestimate bounds
-      tz = market_tz
-    )
-    
-    end_dt <- as.POSIXct(
-      paste(end_date, "20:00:00"),
-      tz = market_tz
-    )
-    
-    start_ts <- floor(as.numeric(start_dt) / 60)
-    end_ts <- ceiling(as.numeric(end_dt) / 60)
+    start_ts <- floor(as.numeric(date_window$start) / 60)
+    end_ts <- ceiling(as.numeric(date_window$end) / 60)
     
     # querying data
     data_unix_min <- dbGetQuery(
@@ -186,10 +204,9 @@ server <- function(input, output, session) {
     )
   })
 
-  choose_candle_minutes <- function(visible_start, visible_end) {
-    candle_sizes <- c(1, 2, 5, 10, 15, 30, 60, 60*2, 60*4, 60*6.5, 60*13, 60*6.5*5)
-    target_max_candles <- 300
+  # Chart Helpers
 
+  choose_candle_minutes <- function(visible_start, visible_end) {
     visible_minutes <- as.numeric(difftime(
       visible_end,
       visible_start,
@@ -200,11 +217,11 @@ server <- function(input, output, session) {
       return(1)
     }
 
-    min_candle_size <- ceiling(visible_minutes / target_max_candles)
-    chosen_size <- candle_sizes[candle_sizes >= min_candle_size][1]
+    min_candle_size <- ceiling(visible_minutes / target_max_visible_candles)
+    chosen_size <- candle_sizes_minutes[candle_sizes_minutes >= min_candle_size][1]
 
     if (is.na(chosen_size)) {
-      return(tail(candle_sizes, 1))
+      return(tail(candle_sizes_minutes, 1))
     }
 
     chosen_size
@@ -238,81 +255,9 @@ server <- function(input, output, session) {
       arrange(.data$symbol, .data$ts)
   }
 
-  selected_date_window <- reactive({
-    req(input$date_range)
-
-    market_tz <- "America/New_York"
-    list(
-      start = as.POSIXct(
-        paste(input$date_range[1], "07:00:00"),
-        tz = market_tz
-      ),
-      end = as.POSIXct(
-        paste(input$date_range[2], "20:00:00"),
-        tz = market_tz
-      )
-    )
-  })
-
-  zoom_ranges <- reactiveValues()
-
-  observeEvent(input$symbols, {
-    selected_symbols <- input$symbols
-
-    if (is.null(selected_symbols)) {
-      selected_symbols <- character()
-    }
-
-    for (name in names(reactiveValuesToList(zoom_ranges))) {
-      if (!name %in% selected_symbols) {
-        zoom_ranges[[name]] <- NULL
-      }
-    }
-  })
-
-  observeEvent(input$date_range, {
-    selected_symbols <- input$symbols
-
-    if (is.null(selected_symbols)) {
-      selected_symbols <- character()
-    }
-
-    for (symbol in selected_symbols) {
-      zoom_ranges[[symbol]] <- NULL
-    }
-  })
-
-  observeEvent(input$chart_zoom, {
-    zoom <- input$chart_zoom
-    req(zoom$id)
-    req(zoom$min)
-    req(zoom$max)
-
-    selected_symbols <- input$symbols
-
-    if (is.null(selected_symbols)) {
-      selected_symbols <- zoom$id
-    }
-
-    zoom_range <- list(
-      start = as.POSIXct(zoom$min / 1000, origin = "1970-01-01", tz = "UTC"),
-      end = as.POSIXct(zoom$max / 1000, origin = "1970-01-01", tz = "UTC")
-    )
-
-    for (symbol in selected_symbols) {
-      old_range <- zoom_ranges[[symbol]]
-
-      if (
-        is.null(old_range) ||
-        abs(as.numeric(difftime(old_range$start, zoom_range$start, units = "secs"))) > 1 ||
-        abs(as.numeric(difftime(old_range$end, zoom_range$end, units = "secs"))) > 1
-      ) {
-        zoom_ranges[[symbol]] <- zoom_range
-      }
-    }
-  })
-
-  draw_callback <- htmlwidgets::JS(
+  # dyRangeSelector wraps zoomCallback without preserving the dygraph instance.
+  # drawCallback receives the graph directly and fires after zoom/pan redraws.
+  chart_zoom_draw_callback <- htmlwidgets::JS(
     "function(graph, isInitial) {
       if (!graph || !graph.xAxisRange) {
         return;
@@ -350,6 +295,72 @@ server <- function(input, output, session) {
       }, 200);
     }"
   )
+
+  # Reactives and Chart State
+
+  selected_date_window <- reactive({
+    req(input$date_range)
+
+    date_window_for_range(input$date_range)
+  })
+
+  zoom_ranges <- reactiveValues()
+
+  selected_symbols_or_empty <- reactive({
+    selected_symbols <- input$symbols
+
+    if (!is.null(selected_symbols)) {
+      return(selected_symbols)
+    }
+
+    character()
+  })
+
+  observeEvent(input$symbols, {
+    selected_symbols <- selected_symbols_or_empty()
+
+    for (name in names(reactiveValuesToList(zoom_ranges))) {
+      if (!name %in% selected_symbols) {
+        zoom_ranges[[name]] <- NULL
+      }
+    }
+  })
+
+  observeEvent(input$date_range, {
+    for (symbol in selected_symbols_or_empty()) {
+      zoom_ranges[[symbol]] <- NULL
+    }
+  })
+
+  observeEvent(input$chart_zoom, {
+    zoom <- input$chart_zoom
+    req(zoom$id)
+    req(zoom$min)
+    req(zoom$max)
+
+    selected_symbols <- selected_symbols_or_empty()
+
+    if (length(selected_symbols) <= 0) {
+      selected_symbols <- zoom$id
+    }
+
+    zoom_range <- list(
+      start = as.POSIXct(zoom$min / 1000, origin = "1970-01-01", tz = "UTC"),
+      end = as.POSIXct(zoom$max / 1000, origin = "1970-01-01", tz = "UTC")
+    )
+
+    for (symbol in selected_symbols) {
+      old_range <- zoom_ranges[[symbol]]
+
+      if (
+        is.null(old_range) ||
+        abs(as.numeric(difftime(old_range$start, zoom_range$start, units = "secs"))) > 1 ||
+        abs(as.numeric(difftime(old_range$end, zoom_range$end, units = "secs"))) > 1
+      ) {
+        zoom_ranges[[symbol]] <- zoom_range
+      }
+    }
+  })
   
   
   # UI Outputs
@@ -407,7 +418,7 @@ server <- function(input, output, session) {
           dygraph(ohlc, main = symbol_now, group = "charts") |> 
             dyCandlestick(compress = FALSE) |> 
             dyRangeSelector(retainDateWindow = TRUE) |>
-            dyCallbacks(drawCallback = draw_callback)
+            dyCallbacks(drawCallback = chart_zoom_draw_callback)
         })
       })
     })
