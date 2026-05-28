@@ -19,6 +19,15 @@ create_app_ui <- function() {
           padding: 0.35rem 0.5rem;
           vertical-align: middle;
         }
+
+        .scrollable-table-card .card-body {
+          max-height: 28rem;
+          overflow: auto;
+        }
+
+        .scrollable-table-card table {
+          margin-bottom: 0;
+        }
       "))
     ),
 
@@ -51,7 +60,7 @@ create_app_ui <- function() {
 
           layout_columns(
             value_box("Queried Row Count", textOutput("queried_row_count")),
-            value_box("Latest Timestamp", textOutput("queried_latest_ts"))
+            value_box("Latest Timestamp (PT)", textOutput("queried_latest_ts"))
           ),
           card(
             class = "null-values-card",
@@ -70,13 +79,23 @@ create_app_ui <- function() {
         layout_columns(
           value_box("Estimated Total Row Count", textOutput("total_row_count")),
           value_box("Unique Symbol Count", textOutput("available_symbol_count")),
-          value_box("Latest Timestamp", textOutput("total_latest_ts"))
+          value_box("Timestamp Range (PT)", textOutput("total_ts_range")),
+          value_box("Table Size", textOutput("table_size")),
+          value_box("Index Size", textOutput("index_size")),
+          value_box("Total Size", textOutput("total_size")),
+          value_box("Chunk Count", textOutput("chunk_count")),
+          value_box("Chunk Range (PT)", textOutput("chunk_range"))
         ),
 
         card(
           class = "null-values-card",
           card_header("Null Values"),
           tableOutput("total_null_values")
+        ),
+        card(
+          class = "scrollable-table-card",
+          card_header("Chunks"),
+          tableOutput("chunk_details")
         )
 
         # TODO add last-updated status, database size, available size in disk.
