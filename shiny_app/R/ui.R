@@ -24,10 +24,6 @@ create_app_ui <- function() {
           max-height: 28rem;
           overflow: auto;
         }
-
-        .scrollable-table-card table {
-          margin-bottom: 0;
-        }
       "))
     ),
 
@@ -44,7 +40,7 @@ create_app_ui <- function() {
           sidebar = sidebar(
             selectizeInput(
               inputId = "symbols",
-              label = "Symbol",
+              label = "Symbols (up to 3)",
               choices = NULL,
               selected = NULL,
               multiple = TRUE,
@@ -71,7 +67,7 @@ create_app_ui <- function() {
           ),
           card(
             class = "null-values-card",
-            card_header("Null Values"),
+            card_header("Missing Values"),
             tableOutput("queried_null_values")
           )
         )
@@ -81,12 +77,38 @@ create_app_ui <- function() {
         "DataBase Info",
 
         card(
+          card_header("System Status"),
+          layout_columns(
+            card(
+              card_header("PostgreSQL"),
+              textOutput("postgres_status", inline = TRUE),
+            ),
+            card(
+              card_header("Last Ingest Result"),
+              textOutput("update_result", inline = TRUE),
+            ),
+            card(
+              card_header("Last Ingest Time"),
+              textOutput("update_start_time", inline = TRUE),
+            ),
+            card(
+              card_header("Next Ingest Time"),
+              textOutput("next_update")
+            ),
+            card(
+              card_header("Status Page Refreshed"),
+              textOutput("page_refreshed")
+            )
+          )
+        ),
+
+        card(
           card_header("Overview"),
           layout_columns(
             value_box("Estimated Total Row Count", textOutput("total_row_count")),
             value_box("Unique Symbol Count", textOutput("available_symbol_count")),
-            value_box("Start (PT)", textOutput("total_ts_start")),
-            value_box("End (PT)", textOutput("total_ts_end"))
+            value_box("Earliest Timestamp (PT)", textOutput("total_ts_start")),
+            value_box("Latest Timestamp (PT)", textOutput("total_ts_end"))
           )
         ),
 
@@ -95,16 +117,11 @@ create_app_ui <- function() {
           layout_columns(
             value_box("Table Size", textOutput("table_size")),
             value_box("Index Size", textOutput("index_size")),
-            value_box("Total Size", textOutput("total_size"))
-          )
-        ),
-
-        card(
-          card_header("Timescale Chunks"),
-          layout_columns(
-            value_box("Chunk Count", textOutput("chunk_count")),
-            value_box("Start (PT)", textOutput("chunk_range_start")),
-            value_box("End (PT)", textOutput("chunk_range_end"))
+            value_box("Total Size", textOutput("total_size")),
+            value_box(
+              "Timescale Chunk Count",
+              textOutput("chunk_count")
+            ),
           ),
           div(
             class = "scrollable-table-card",

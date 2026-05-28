@@ -7,6 +7,7 @@ register_summary_outputs <- function(
   storage_stats <- get_database_storage_stats(con)
   chunk_summary <- get_chunk_summary(con)
 
+  # Stock View
   output$queried_row_count <- renderText({
     format(nrow(bars_data()), big.mark = ",")
   })
@@ -25,6 +26,9 @@ register_summary_outputs <- function(
       group_by(symbol) |>
       summarize(across(everything(), ~ sum(is.na(.))))
   })
+
+
+  # Database Info
 
   output$total_row_count <- renderText({
     n <- get_total_row_count(con)
@@ -60,6 +64,49 @@ register_summary_outputs <- function(
     ts_range$end
   })
 
+  output$postgres_status <- renderText({
+    run_systemctl(c("is-active", "postgresql.service"))
+  })
+
+  output$update_start_time <- renderText({
+    run_systemctl(c(
+      "show",
+      "stockdb-update.service",
+      "-p",
+      "ExecMainStartTimestamp",
+      "--value"
+    ))
+  })
+
+  output$update_result <- renderText({
+    run_systemctl(c(
+      "show",
+      "stockdb-update.service",
+      "-p",
+      "Result",
+      "--value"
+    ))
+  })
+
+  output$next_update <- renderText({
+    run_systemctl(c(
+      "show",
+      "stockdb-update.timer",
+      "-p",
+      "NextElapseUSecRealtime",
+      "--value"
+    ))
+  })
+
+  output$page_refreshed <- renderText({
+    format(
+      Sys.time(),
+      "%Y-%m-%d %H:%M:%S %Z",
+      tz = "America/Los_Angeles"
+    )
+  })
+
+
   output$table_size <- renderText({
     storage_stats$table_size[1]
   })
@@ -78,22 +125,6 @@ register_summary_outputs <- function(
     }
 
     format(chunk_summary$chunk_count, big.mark = ",")
-  })
-
-  output$chunk_range_start <- renderText({
-    if (is.null(chunk_summary)) {
-      return("Unavailable")
-    }
-
-    chunk_summary$range_start
-  })
-
-  output$chunk_range_end <- renderText({
-    if (is.null(chunk_summary)) {
-      return("Unavailable")
-    }
-
-    chunk_summary$range_end
   })
 
   output$total_null_values <- renderTable({

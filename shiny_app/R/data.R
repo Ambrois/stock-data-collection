@@ -210,3 +210,13 @@ format_timestamp <- function(timestamp) {
     "%Y-%m-%d %H:%M:%S"
   )
 }
+
+run_systemctl <- function(args) {
+  output <- system2(
+    "systemctl",
+    args = args,
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  paste(output, collapse = "\n")
+}
