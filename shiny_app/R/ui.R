@@ -38,7 +38,7 @@ create_app_ui <- function() {
 
     navset_tab(
       nav_panel(
-        "Stock Info",
+        "Stock View",
 
         page_sidebar(
           sidebar = sidebar(
@@ -58,17 +58,21 @@ create_app_ui <- function() {
             )
           ),
 
-          layout_columns(
-            value_box("Queried Row Count", textOutput("queried_row_count")),
-            value_box("Latest Timestamp (PT)", textOutput("queried_latest_ts"))
+          card(
+            uiOutput("chart_stack")
+          ),
+
+          card(
+            card_header("Overview"),
+            layout_columns(
+              value_box("Queried Row Count", textOutput("queried_row_count")),
+              value_box("Latest Timestamp (PT)", textOutput("queried_latest_ts"))
+            )
           ),
           card(
             class = "null-values-card",
             card_header("Null Values"),
             tableOutput("queried_null_values")
-          ),
-          card(
-            uiOutput("chart_stack")
           )
         )
       ),
@@ -114,7 +118,6 @@ create_app_ui <- function() {
           tableOutput("total_null_values")
         )
 
-        # TODO add last-updated status, database size, available size in disk.
       )
     )
   )
