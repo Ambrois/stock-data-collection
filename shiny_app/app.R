@@ -185,6 +185,171 @@ server <- function(input, output, session) {
       end_date = input$date_range[2]
     )
   })
+
+  choose_candle_minutes <- function(visible_start, visible_end) {
+    candle_sizes <- c(1, 2, 5, 10, 15, 30, 60, 60*2, 60*4, 60*6.5, 60*13, 60*6.5*5)
+    target_max_candles <- 300
+
+    visible_minutes <- as.numeric(difftime(
+      visible_end,
+      visible_start,
+      units = "mins"
+    ))
+
+    if (is.na(visible_minutes) || visible_minutes <= 0) {
+      return(1)
+    }
+
+    min_candle_size <- ceiling(visible_minutes / target_max_candles)
+    chosen_size <- candle_sizes[candle_sizes >= min_candle_size][1]
+
+    if (is.na(chosen_size)) {
+      return(tail(candle_sizes, 1))
+    }
+
+    chosen_size
+  }
+
+  aggregate_ohlc <- function(df, candle_minutes) {
+    if (candle_minutes <= 1) {
+      return(df |> arrange(.data$ts))
+    }
+
+    candle_seconds <- candle_minutes * 60
+
+    df |>
+      arrange(.data$ts) |>
+      mutate(
+        candle_ts = as.POSIXct(
+          floor(as.numeric(.data$ts) / candle_seconds) * candle_seconds,
+          origin = "1970-01-01",
+          tz = "UTC"
+        )
+      ) |>
+      group_by(.data$symbol, .data$candle_ts) |>
+      summarize(
+        ts = dplyr::first(.data$candle_ts),
+        open = dplyr::first(.data$open),
+        high = max(.data$high, na.rm = TRUE),
+        low = min(.data$low, na.rm = TRUE),
+        close = dplyr::last(.data$close),
+        .groups = "drop"
+      ) |>
+      arrange(.data$symbol, .data$ts)
+  }
+
+  selected_date_window <- reactive({
+    req(input$date_range)
+
+    market_tz <- "America/New_York"
+    list(
+      start = as.POSIXct(
+        paste(input$date_range[1], "07:00:00"),
+        tz = market_tz
+      ),
+      end = as.POSIXct(
+        paste(input$date_range[2], "20:00:00"),
+        tz = market_tz
+      )
+    )
+  })
+
+  zoom_ranges <- reactiveValues()
+
+  observeEvent(input$symbols, {
+    selected_symbols <- input$symbols
+
+    if (is.null(selected_symbols)) {
+      selected_symbols <- character()
+    }
+
+    for (name in names(reactiveValuesToList(zoom_ranges))) {
+      if (!name %in% selected_symbols) {
+        zoom_ranges[[name]] <- NULL
+      }
+    }
+  })
+
+  observeEvent(input$date_range, {
+    selected_symbols <- input$symbols
+
+    if (is.null(selected_symbols)) {
+      selected_symbols <- character()
+    }
+
+    for (symbol in selected_symbols) {
+      zoom_ranges[[symbol]] <- NULL
+    }
+  })
+
+  observeEvent(input$chart_zoom, {
+    zoom <- input$chart_zoom
+    req(zoom$id)
+    req(zoom$min)
+    req(zoom$max)
+
+    selected_symbols <- input$symbols
+
+    if (is.null(selected_symbols)) {
+      selected_symbols <- zoom$id
+    }
+
+    zoom_range <- list(
+      start = as.POSIXct(zoom$min / 1000, origin = "1970-01-01", tz = "UTC"),
+      end = as.POSIXct(zoom$max / 1000, origin = "1970-01-01", tz = "UTC")
+    )
+
+    for (symbol in selected_symbols) {
+      old_range <- zoom_ranges[[symbol]]
+
+      if (
+        is.null(old_range) ||
+        abs(as.numeric(difftime(old_range$start, zoom_range$start, units = "secs"))) > 1 ||
+        abs(as.numeric(difftime(old_range$end, zoom_range$end, units = "secs"))) > 1
+      ) {
+        zoom_ranges[[symbol]] <- zoom_range
+      }
+    }
+  })
+
+  draw_callback <- htmlwidgets::JS(
+    "function(graph, isInitial) {
+      if (!graph || !graph.xAxisRange) {
+        return;
+      }
+
+      var el = graph.maindiv_;
+
+      while (el && !/_candles$/.test(el.id)) {
+        el = el.parentElement;
+      }
+
+      if (!el) {
+        return;
+      }
+
+      var outputId = el.id.replace(/_candles$/, '');
+      var range = graph.xAxisRange();
+
+      if (!range || range.length !== 2) {
+        return;
+      }
+
+      if (!window.stockChartZoomTimers) {
+        window.stockChartZoomTimers = {};
+      }
+
+      clearTimeout(window.stockChartZoomTimers[outputId]);
+      window.stockChartZoomTimers[outputId] = setTimeout(function() {
+        Shiny.setInputValue('chart_zoom', {
+          id: outputId,
+          min: range[0],
+          max: range[1],
+          nonce: Math.random()
+        }, {priority: 'event'});
+      }, 200);
+    }"
+  )
   
   
   # UI Outputs
@@ -220,6 +385,19 @@ server <- function(input, output, session) {
           validate(
             need(nrow(df) > 0, paste("No data found for", symbol_now))
           )
+
+          visible_range <- zoom_ranges[[symbol_now]]
+
+          if (is.null(visible_range)) {
+            visible_range <- selected_date_window()
+          }
+
+          candle_minutes <- choose_candle_minutes(
+            visible_start = visible_range$start,
+            visible_end = visible_range$end
+          )
+
+          df <- aggregate_ohlc(df, candle_minutes)
           
           ohlc <- xts(
             x = df[, c("open", "high", "low", "close")],
@@ -228,7 +406,8 @@ server <- function(input, output, session) {
           
           dygraph(ohlc, main = symbol_now, group = "charts") |> 
             dyCandlestick(compress = FALSE) |> 
-            dyRangeSelector()
+            dyRangeSelector(retainDateWindow = TRUE) |>
+            dyCallbacks(drawCallback = draw_callback)
         })
       })
     })
