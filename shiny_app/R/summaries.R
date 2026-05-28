@@ -30,7 +30,7 @@ register_summary_outputs <- function(
       return("Unavailable")
     }
 
-    format(n, big.mark = ",", scientific = FALSE)
+    paste0("~", format(as.numeric(n), big.mark = ",", scientific = FALSE))
   })
 
   output$available_symbol_count <- renderText({

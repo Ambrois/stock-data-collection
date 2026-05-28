@@ -68,7 +68,7 @@ create_app_ui <- function() {
         "DataBase Info",
 
         layout_columns(
-          value_box("Approximate Total Row Count", textOutput("total_row_count")),
+          value_box("Estimated Total Row Count", textOutput("total_row_count")),
           value_box("Unique Symbol Count", textOutput("available_symbol_count")),
           value_box("Latest Timestamp", textOutput("total_latest_ts"))
         ),

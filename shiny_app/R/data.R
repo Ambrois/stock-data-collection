@@ -57,9 +57,12 @@ get_total_row_count <- function(con) {
   result <- dbGetQuery(
     con,
     "
-      SELECT reltuples::bigint AS estimated_rows
-      FROM pg_class
-      WHERE oid = 'public.hist_minutely_bars'::regclass;
+      SELECT SUM(GREATEST(c.reltuples, 0))::bigint AS estimated_rows
+      FROM timescaledb_information.chunks ch
+      JOIN pg_class c
+        ON c.oid = format('%I.%I', ch.chunk_schema, ch.chunk_name)::regclass
+      WHERE ch.hypertable_schema = 'public'
+        AND ch.hypertable_name = 'hist_minutely_bars';
     "
   )
 
