@@ -96,6 +96,30 @@ ui <- page_fluid(
   )
 )
 
+local_candlestick_plotter_path <- function() {
+  candidates <- c(
+    file.path("www", "candlestick-auto-width.js"),
+    file.path("shiny_app", "www", "candlestick-auto-width.js")
+  )
+
+  path <- candidates[file.exists(candidates)][1]
+
+  if (is.na(path)) {
+    stop("Unable to find candlestick-auto-width.js", call. = FALSE)
+  }
+
+  path
+}
+
+dyAutoWidthCandlestick <- function(dygraph) {
+  dyPlotter(
+    dygraph = dygraph,
+    name = "AutoWidthCandlestickPlotter",
+    path = local_candlestick_plotter_path(),
+    version = "1.0"
+  )
+}
+
 server <- function(input, output, session) {
   
   # Setup
@@ -416,7 +440,7 @@ server <- function(input, output, session) {
           )
           
           dygraph(ohlc, main = symbol_now, group = "charts") |> 
-            dyCandlestick(compress = FALSE) |> 
+            dyAutoWidthCandlestick() |>
             dyRangeSelector(retainDateWindow = TRUE) |>
             dyCallbacks(drawCallback = chart_zoom_draw_callback)
         })
