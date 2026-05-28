@@ -69,3 +69,19 @@ get_total_row_count <- function(con) {
 
   result$estimated_rows[1]
 }
+
+get_total_latest_ts <- function(con) {
+  result <- dbGetQuery(
+    con,
+    "
+      SELECT MAX(ts) AS latest_ts
+      FROM hist_minutely_bars;
+    "
+  )
+
+  if (nrow(result) <= 0 || is.na(result$latest_ts[1])) {
+    return(NA)
+  }
+
+  as.POSIXct(result$latest_ts[1] * 60, origin = "1970-01-01", tz = "UTC")
+}

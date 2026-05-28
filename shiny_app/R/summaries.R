@@ -14,16 +14,6 @@ register_summary_outputs <- function(
     as.character(max(df$ts, na.rm = TRUE))
   })
 
-  output$queried_duplicate_row_count <- renderText({
-    n_dup <- bars_data() |>
-      count(symbol, ts, name = "size") |>
-      filter(size > 1) |>
-      summarize(total = sum(size - 1), .groups = "drop") |>
-      pull(total)
-
-    format(n_dup, big.mark = ",")
-  })
-
   output$queried_null_values <- renderTable({
     df <- bars_data()
     validate(need(nrow(df) > 0, "No rows queried."))
@@ -48,11 +38,13 @@ register_summary_outputs <- function(
   })
 
   output$total_latest_ts <- renderText({
-    "Placeholder"
-  })
+    latest_ts <- get_total_latest_ts(con)
 
-  output$total_duplicate_row_count <- renderText({
-    "Placeholder"
+    if (is.na(latest_ts)) {
+      return("Unavailable")
+    }
+
+    as.character(latest_ts)
   })
 
   output$total_null_values <- renderTable({

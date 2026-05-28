@@ -51,8 +51,7 @@ create_app_ui <- function() {
 
           layout_columns(
             value_box("Queried Row Count", textOutput("queried_row_count")),
-            value_box("Latest Timestamp", textOutput("queried_latest_ts")),
-            value_box("Duplicated Rows Count", textOutput("queried_duplicate_row_count"))
+            value_box("Latest Timestamp", textOutput("queried_latest_ts"))
           ),
           card(
             class = "null-values-card",
@@ -71,8 +70,7 @@ create_app_ui <- function() {
         layout_columns(
           value_box("Approximate Total Row Count", textOutput("total_row_count")),
           value_box("Unique Symbol Count", textOutput("available_symbol_count")),
-          value_box("Latest Timestamp", textOutput("total_latest_ts")),
-          value_box("Duplicated Rows Count", textOutput("total_duplicate_row_count"))
+          value_box("Latest Timestamp", textOutput("total_latest_ts"))
         ),
 
         card(
