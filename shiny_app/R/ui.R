@@ -20,7 +20,7 @@ create_app_ui <- function() {
           vertical-align: middle;
         }
 
-        .scrollable-table-card .card-body {
+        .scrollable-table-card {
           max-height: 28rem;
           overflow: auto;
         }
@@ -76,26 +76,40 @@ create_app_ui <- function() {
       nav_panel(
         "DataBase Info",
 
-        layout_columns(
-          value_box("Estimated Total Row Count", textOutput("total_row_count")),
-          value_box("Unique Symbol Count", textOutput("available_symbol_count")),
-          value_box("Timestamp Range (PT)", textOutput("total_ts_range")),
-          value_box("Table Size", textOutput("table_size")),
-          value_box("Index Size", textOutput("index_size")),
-          value_box("Total Size", textOutput("total_size")),
-          value_box("Chunk Count", textOutput("chunk_count")),
-          value_box("Chunk Range (PT)", textOutput("chunk_range"))
+        card(
+          card_header("Overview"),
+          layout_columns(
+            value_box("Estimated Total Row Count", textOutput("total_row_count")),
+            value_box("Unique Symbol Count", textOutput("available_symbol_count")),
+            value_box("Timestamp Range (PT)", textOutput("total_ts_range"))
+          )
+        ),
+
+        card(
+          card_header("Storage"),
+          layout_columns(
+            value_box("Table Size", textOutput("table_size")),
+            value_box("Index Size", textOutput("index_size")),
+            value_box("Total Size", textOutput("total_size"))
+          )
+        ),
+
+        card(
+          card_header("Timescale Chunks"),
+          layout_columns(
+            value_box("Chunk Count", textOutput("chunk_count")),
+            value_box("Chunk Range (PT)", textOutput("chunk_range"))
+          ),
+          div(
+            class = "scrollable-table-card",
+            tableOutput("chunk_details")
+          )
         ),
 
         card(
           class = "null-values-card",
-          card_header("Null Values"),
+          card_header("Data Quality"),
           tableOutput("total_null_values")
-        ),
-        card(
-          class = "scrollable-table-card",
-          card_header("Chunks"),
-          tableOutput("chunk_details")
         )
 
         # TODO add last-updated status, database size, available size in disk.
