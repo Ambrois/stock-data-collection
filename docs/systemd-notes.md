@@ -1,81 +1,82 @@
 # Systemd Notes
 
-These are operational notes for the self-hosted Shiny app on `lilcenter`.
+These are generalized operational notes for running the Shiny dashboard as a self-hosted service. They intentionally avoid real hostnames, domains, local usernames, absolute personal paths, and secret file names so the repo can remain public.
 
 ## Runtime Topology
 
 ```text
-stockdb.ambrois.uk
-  -> Cloudflare DNS A record
-  -> home router port forwards 80/443
-  -> caddy.service
-  -> stockdb-shiny.service on :3838
-  -> local PostgreSQL on :5432
+public DNS name
+  -> DNS provider record
+  -> HTTPS reverse proxy
+  -> Shiny app systemd service
+  -> local PostgreSQL/TimescaleDB
 ```
+
+The reverse proxy terminates HTTPS and forwards requests to the Shiny process. The Shiny process connects to a local database using credentials loaded from an environment file outside the repository.
 
 ## Units
 
 `stockdb-shiny.service`
 
-- Custom unit: `/etc/systemd/system/stockdb-shiny.service`
-- Runs the Shiny app from `/home/mh/stock_data_collection/shiny_app`
-- Starts R with `shiny::runApp(host="0.0.0.0", port=3838)`
-- Loads DB secret from `/etc/stockdb/shiny.env`
-- Depends on network and Postgres being available
+- Custom systemd unit for the Shiny dashboard.
+- Runs the app from the repository's `shiny_app/` directory.
+- Starts R with `shiny::runApp(...)` bound to a local or private interface.
+- Loads database credentials from an environment file outside the repo.
+- Depends on network and PostgreSQL availability.
 
-`caddy.service`
+`reverse-proxy.service`
 
-- Package-managed unit
-- Config: `/etc/caddy/Caddyfile`
-- Public HTTPS entrypoint for `stockdb.ambrois.uk`
-- Current app route is `reverse_proxy localhost:3838`
-- Caddy owns TLS certificate management
+- Package-managed reverse proxy such as Caddy or nginx.
+- Provides the public HTTPS entrypoint.
+- Forwards dashboard traffic to the Shiny service.
+- Owns TLS certificate management.
 
 `cloudflare-ddns.service`
 
-- Custom oneshot unit: `/etc/systemd/system/cloudflare-ddns.service`
-- Runs `/home/mh/stock_data_collection/scripts/cloudflare_ddns.sh`
-- Loads Cloudflare token/settings from `/etc/stockdb/cloudflare-ddns.env`
-- Updates the `stockdb.ambrois.uk` A record if the residential public IP changed
-- `inactive (dead)` is normal after successful runs
+- Optional oneshot unit for dynamic DNS updates.
+- Runs `scripts/cloudflare_ddns.sh`.
+- Loads Cloudflare token and DNS settings from an environment file outside the repo.
+- Updates the configured DNS record when the public IP changes.
+- `inactive (dead)` is normal after a successful oneshot run.
 
 `cloudflare-ddns.timer`
 
-- Custom timer: `/etc/systemd/system/cloudflare-ddns.timer`
-- Triggers `cloudflare-ddns.service`
-- Runs 5 minutes after boot, then daily
-- Uses `Persistent=true` so missed runs are caught up after boot
+- Optional timer for `cloudflare-ddns.service`.
+- Runs after boot and then on a recurring schedule.
+- Can use `Persistent=true` so missed runs are caught up after boot.
 
 ## Secrets
 
-Secrets live outside the repo:
+Secrets should live outside the repository in service-managed environment files. Do not commit real API tokens, database passwords, hostnames, public IP addresses, or personal filesystem paths.
 
-```text
-/etc/stockdb/shiny.env
-/etc/stockdb/cloudflare-ddns.env
-```
+Typical secret/config values include:
 
-The Cloudflare token should be scoped only to DNS edits for `ambrois.uk`.
+- Shiny database password.
+- Cloudflare API token.
+- Cloudflare zone and DNS record names.
+- Alpaca API credentials for ingestion jobs.
+
+Cloudflare tokens should be scoped narrowly to DNS edits for the relevant zone.
 
 ## Debugging Priorities
 
-If the site works on LAN but not externally, check in this order:
+If the dashboard works locally but not externally, check in this order:
 
-1. Cloudflare DNS A record vs current residential public IP
-2. Router port forwards for 80/443 to this host
-3. Caddy listener and reverse proxy
-4. Shiny listener on `0.0.0.0:3838`
-5. PostgreSQL and `/etc/stockdb/shiny.env`
+1. DNS record vs current public IP.
+2. Firewall and network forwarding rules.
+3. Reverse proxy listener and upstream route.
+4. Shiny service listener.
+5. PostgreSQL service and Shiny database credentials.
 
-Useful commands:
+Useful command patterns:
 
 ```bash
-systemctl status stockdb-shiny.service caddy.service cloudflare-ddns.timer
-journalctl -u stockdb-shiny.service -n 100 --no-pager
-journalctl -u caddy.service -n 100 --no-pager
-journalctl -u cloudflare-ddns.service -n 100 --no-pager
-systemctl list-timers cloudflare-ddns.timer --no-pager
+systemctl status <shiny-service> <reverse-proxy-service> <ddns-timer>
+journalctl -u <shiny-service> -n 100 --no-pager
+journalctl -u <reverse-proxy-service> -n 100 --no-pager
+journalctl -u <ddns-service> -n 100 --no-pager
+systemctl list-timers <ddns-timer> --no-pager
 ss -ltnp
-dig +short stockdb.ambrois.uk
+dig +short <public-dashboard-domain>
 curl -4 https://api.ipify.org
 ```
